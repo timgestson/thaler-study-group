@@ -19,16 +19,9 @@ impl Prover {
     pub fn init(g: &MPoly<Fr, SparseTerm>) -> (Self, UPoly<Fr>) {
         let h = hypercube_eval(&g);
 
-        let first_rnd = (0..g.num_vars - 1)
-            .map(|_| [Fr::zero(), Fr::one()])
-            .multi_cartesian_product()
-            .map(|x| {
-                x.iter().fold(vec![None], |mut acc, &var| {
-                    acc.push(Some(var));
-                    acc
-                })
-            })
-            .fold(UPoly::zero(), |acc, vals| acc + partial_eval(g, &vals));
+        // Get Univariate Polynomial for first variable filling others in as
+        // sum of their hypercube ex. g(X1,0,0) + g(X1,0,1) + g(X1,1,0) + g(X1,1,1)
+        let first_rnd = partial_hypercube_eval(g, &[None]);
 
         (
             Self {
@@ -47,23 +40,12 @@ impl Prover {
         if inputs.len() == self.g.num_vars {
             partial_eval(&self.g, &inputs)
         } else {
-            // evaluate remaining vars with hypercube and sum
-            (0..self.g.num_vars - inputs.len())
-                .map(|_| [Fr::zero(), Fr::one()])
-                .multi_cartesian_product()
-                .map(|x| {
-                    x.iter().fold(inputs.clone(), |mut acc, &var| {
-                        acc.push(Some(var));
-                        acc
-                    })
-                })
-                .fold(UPoly::zero(), |acc, vals| {
-                    acc + partial_eval(&self.g, &vals)
-                })
+            partial_hypercube_eval(&self.g, &inputs)
         }
     }
 }
 
+// Take variable values via Some(Fr) and solve return a Univariate Polynomial for the None variable
 fn partial_eval(g: &MPoly<Fr, SparseTerm>, vals: &[Option<Fr>]) -> UPoly<Fr> {
     g.terms
         .iter()
@@ -81,10 +63,25 @@ fn partial_eval(g: &MPoly<Fr, SparseTerm>, vals: &[Option<Fr>]) -> UPoly<Fr> {
         .fold(UPoly::zero(), |acc, poly| acc + poly)
 }
 
+// Sum Polynomial for all 0,1 combinations
 fn hypercube_eval(g: &MPoly<Fr, SparseTerm>) -> Fr {
     (0..g.num_vars)
         .map(|_| [Fr::zero(), Fr::one()])
         .multi_cartesian_product()
         .map(|x| g.evaluate(&x))
         .fold(Fr::zero(), |acc, i| acc + i)
+}
+
+// Take variables and use 0,1 combination for the vars not provided
+fn partial_hypercube_eval(g: &MPoly<Fr, SparseTerm>, inputs: &[Option<Fr>]) -> UPoly<Fr> {
+    (0..g.num_vars - inputs.len())
+        .map(|_| [Fr::zero(), Fr::one()])
+        .multi_cartesian_product()
+        .map(|x| {
+            x.iter().fold(inputs.to_vec(), |mut acc, &var| {
+                acc.push(Some(var));
+                acc
+            })
+        })
+        .fold(UPoly::zero(), |acc, vals| acc + partial_eval(g, &vals))
 }
