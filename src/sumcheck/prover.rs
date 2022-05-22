@@ -46,6 +46,7 @@ impl Prover {
 }
 
 // Take variable values via Some(Fr) and solve return a Univariate Polynomial for the None variable
+// i.e. [None, Some(2), Some(3)] will return a Poly in respect to x1 with x2 solved for 2 and x3 solved for 3
 fn partial_eval(g: &MPoly<Fr, SparseTerm>, vals: &[Option<Fr>]) -> UPoly<Fr> {
     g.terms
         .iter()
